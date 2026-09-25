@@ -19,18 +19,24 @@
  */
 
 window.NERP_CONFIG = {
-  // MAIN DISCORD WEBHOOK URL (Applications submitted by anyone on the website will be sent here!)
-  // PASTE YOUR DISCORD WEBHOOK URL INSIDE THE QUOTES:
+  // ALL APPLICATIONS CLIENT-SIDE SUBMISSION ALERT DISCORD WEBHOOK
   discordWebhook: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",
 
-  // Department-Specific Channel Webhooks
+  // Department-Specific Submission Webhooks (Defaults to main submission webhook)
   departmentWebhooks: {
-    whitelist: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",     // #citizen-tickets channel webhook
-    police: "https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3",        // #police-recruitment channel webhook
-    ems: "https://discord.com/api/webhooks/1552758037570256930/idkLCx1rfjNMef8TluzUZbSwfooSRwJywlPWbM9H-dS2X-PHnyzbqsCFvfnI7_CXOzdr",           // #ems-applications channel webhook
-    mechanic: "",      // #mechanic-desk channel webhook (uses default if empty)
-    staff: "",         // #staff-applications channel webhook (uses default if empty)
-    business: ""       // #business-registrations channel webhook (uses default if empty)
+    whitelist: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",
+    police: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",
+    ems: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",
+    mechanic: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",
+    staff: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",
+    business: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw"
+  },
+
+  // APPLICATION DECISION / RESPONSE DISCORD WEBHOOKS (Sent when status is Accepted / Rejected by Staff)
+  responseWebhooks: {
+    whitelist: "https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-", // Application Response Entry Ticket Webhook
+    police: "https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3",    // Police Response Webhook
+    ems: "https://discord.com/api/webhooks/1552758037570256930/idkLCx1rfjNMef8TluzUZbSwfooSRwJywlPWbM9H-dS2X-PHnyzbqsCFvfnI7_CXOzdr"         // EMS Response Webhook
   },
 
   // Discord Bot Identity in messages

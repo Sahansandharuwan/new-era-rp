@@ -110,8 +110,8 @@ class ApplicationController extends Controller
         }
         $app->save();
 
-        // Discord Status Announcement disabled as requested (only new ticket submissions post to Discord)
-        // $this->dispatchDiscordStatus($app, $status);
+        // Dispatch Discord Status Announcement Webhook to corresponding department response webhook
+        $this->dispatchDiscordStatus($app, $status);
 
         return response()->json([
             'success' => true,
@@ -134,22 +134,17 @@ class ApplicationController extends Controller
     }
 
     /**
-     * Internal: Dispatch Discord Submission Webhook.
+     * Internal: Dispatch Discord Submission Webhook (All Submissions Alert).
      */
     protected function dispatchDiscordSubmission(Application $app, ?string $passImageBase64 = null)
     {
-        $entryHook = env('DISCORD_WEBHOOK_ENTRY') ?: 'https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw';
-        $policeHook = env('DISCORD_WEBHOOK_POLICE') ?: 'https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3';
-        $emsHook = env('DISCORD_WEBHOOK_EMS') ?: 'https://discord.com/api/webhooks/1552758037570256930/idkLCx1rfjNMef8TluzUZbSwfooSRwJywlPWbM9H-dS2X-PHnyzbqsCFvfnI7_CXOzdr';
-
-        $webhookUrl = match($app->dept) {
-            'police' => $policeHook,
-            'ems' => $emsHook,
-            default => $entryHook,
-        };
+        // All applications client-side submission alert webhook
+        $webhookUrl = env('DISCORD_WEBHOOK_SUBMISSION') 
+            ?: (env('DISCORD_WEBHOOK_ENTRY') 
+            ?: 'https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw');
 
         if (empty($webhookUrl)) {
-            Log::warning("No Discord Webhook URL configured for dept: {$app->dept}");
+            Log::warning("No Discord Webhook URL configured for submissions");
             return;
         }
 
@@ -157,28 +152,20 @@ class ApplicationController extends Controller
         $hasImage = !empty($passImageBase64);
 
         $embed = [
-            'title' => "📋 NEW " . strtoupper($app->dept_name) . " SUBMITTED",
-            'description' => "Applicant **{$app->character_name}** ({$app->discord_tag}) has submitted an official application.",
             'color' => 0x00eaff,
-            'fields' => [
-                ['name' => '🎫 Ticket Reference', 'value' => "`{$app->id}`", 'inline' => true],
-                ['name' => '💬 Discord User', 'value' => "{$app->discord_tag}", 'inline' => true],
-                ['name' => '👤 Character Name', 'value' => "{$app->character_name}", 'inline' => true],
-                ['name' => '🎂 Real Age', 'value' => "{$app->age} Years Old", 'inline' => true],
-                ['name' => '🏢 Department', 'value' => "{$app->dept_name}", 'inline' => true],
-                ['name' => '📅 Submitted Date', 'value' => $app->created_at->format('Y-m-d'), 'inline' => true],
-                ['name' => '⚖️ Review Status', 'value' => "🟡 **PENDING REVIEW**", 'inline' => true]
-            ],
-            'footer' => ['text' => 'NEW ERA ROLEPLAY COMMUNITY • AUTOMATED ENTRY SYSTEM'],
+            'footer' => ['text' => 'NEW ERA ROLEPLAY COMMUNITY • OFFICIAL CITIZEN ENTRY PASS'],
             'timestamp' => now()->toIso8601String()
         ];
 
         if ($hasImage) {
             $embed['image'] = ['url' => "attachment://{$fileName}"];
+        } else {
+            $embed['title'] = "📋 NEW " . strtoupper($app->dept_name) . " SUBMITTED";
+            $embed['description'] = "Applicant **{$app->character_name}** ({$app->discord_tag})\nTicket Reference: `{$app->id}`\nStatus: 🟡 **PENDING REVIEW**";
         }
 
         $payload = [
-            'content' => "🔔 **[NEW ERA ROLEPLAY] NEW ENTRY TICKET APPLICATION RECEIVED**",
+            'content' => "📢 **[NEW ERA ROLEPLAY] NEW ENTRY TICKET APPLICATION RECEIVED**\nApplicant **{$app->character_name}** ({$app->discord_tag}) has submitted an official application. Reference: `{$app->id}`",
             'username' => 'New Era Entry Gateway',
             'embeds' => [$embed]
         ];
@@ -202,14 +189,18 @@ class ApplicationController extends Controller
     }
 
     /**
-     * Internal: Dispatch Discord Status Announcement Webhook.
+     * Internal: Dispatch Discord Status Announcement Webhook (Response Webhooks).
      */
     protected function dispatchDiscordStatus(Application $app, $statusType)
     {
+        $respEntry = env('DISCORD_WEBHOOK_RESPONSE_ENTRY') ?: 'https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-';
+        $respPolice = env('DISCORD_WEBHOOK_RESPONSE_POLICE') ?: 'https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3';
+        $respEms = env('DISCORD_WEBHOOK_RESPONSE_EMS') ?: 'https://discord.com/api/webhooks/1552758037570256930/idkLCx1rfjNMef8TluzUZbSwfooSRwJywlPWbM9H-dS2X-PHnyzbqsCFvfnI7_CXOzdr';
+
         $webhookUrl = match($app->dept) {
-            'police' => env('DISCORD_WEBHOOK_POLICE', env('DISCORD_WEBHOOK_ENTRY')),
-            'ems' => env('DISCORD_WEBHOOK_EMS', env('DISCORD_WEBHOOK_ENTRY')),
-            default => env('DISCORD_WEBHOOK_ENTRY'),
+            'police' => $respPolice,
+            'ems' => $respEms,
+            default => $respEntry,
         };
 
         if (empty($webhookUrl)) return;
@@ -218,30 +209,32 @@ class ApplicationController extends Controller
         $isRejected = strtolower($statusType) === 'rejected';
         $statusWord = $isApproved ? 'ACCEPTED' : ($isRejected ? 'REJECTED' : 'PENDING');
         $statusEmoji = $isApproved ? '✅' : ($isRejected ? '❌' : '⏳');
-        $color = $isApproved ? 0x2ed573 : ($isRejected ? 0xff4757 : 0xffa502);
+        $color = $isApproved ? 0x00ff88 : ($isRejected ? 0xff4757 : 0xffa502);
+
+        $userMention = (preg_match('/\d{15,20}/', $app->discord_tag, $m)) ? "<@{$m[0]}>" : "@{$app->discord_tag}";
+
+        if ($isApproved) {
+            $content = "{$userMention}, Your whitelist application has been **ACCEPTED** ✅.\n\nPlease check announcements for the next steps regarding your interview.\n\n**RESULT**\n**ACCEPTED** ✅";
+        } elseif ($isRejected) {
+            $content = "{$userMention}, Your application has been **REJECTED** ❌.\n\nYou may re-apply after 7 days following the server guidelines.\n\n**RESULT**\n**REJECTED** ❌";
+        } else {
+            $content = "{$userMention}, Your application is currently under **PENDING REVIEW** ⏳.\n\nPlease keep your Discord DMs open for staff contact.";
+        }
 
         $payload = [
-            'content' => "📢 **[NEW ERA ROLEPLAY] APPLICATION STATUS UPDATE: {$app->id}**",
+            'content' => $content,
             'username' => 'New Era Entry Gateway',
             'embeds' => [
                 [
-                    'title' => "{$statusEmoji} APPLICATION {$statusWord} - {$app->character_name}",
-                    'description' => "Applicant **{$app->character_name}** ({$app->discord_tag}), your application has been officially marked as **{$statusWord}** by server administration.",
                     'color' => $color,
-                    'fields' => [
-                        ['name' => '🎫 Ticket Reference', 'value' => "`{$app->id}`", 'inline' => true],
-                        ['name' => '🏢 Department', 'value' => "{$app->dept_name}", 'inline' => true],
-                        ['name' => '⚖️ Decision', 'value' => "{$statusEmoji} **{$statusWord}**", 'inline' => true],
-                        ['name' => '📝 Staff Remarks', 'value' => $app->notes ?: 'WELCOME TO NEW ERA ROLEPLAY COMMUNITY', 'inline' => false]
-                    ],
-                    'footer' => ['text' => 'NEW ERA ROLEPLAY COMMUNITY • AUTOMATED ENTRY SYSTEM'],
+                    'footer' => ['text' => 'NEW ERA ROLEPLAY COMMUNITY • APPLICATION DECISION'],
                     'timestamp' => now()->toIso8601String()
                 ]
             ]
         ];
 
         try {
-            Http::timeout(6)->post($webhookUrl, $payload);
+            Http::timeout(8)->post($webhookUrl, $payload);
         } catch (\Exception $e) {
             Log::error("Discord status webhook failed: " . $e->getMessage());
         }

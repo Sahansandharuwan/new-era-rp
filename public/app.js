@@ -1387,48 +1387,42 @@ function setupApplicationPortal() {
 // ==========================================================================
 function sendDiscordSubmissionWebhook(app) {
   const cfg = DataStore.getConfig();
-  const routes = DataStore.getDiscordRoutes();
-  const route = routes.find(r => r.deptId === app.dept && r.enabled !== false);
   const globalCfg = window.NERP_CONFIG || {};
 
-  // Target Webhook: Use department-specific webhook URL if configured, else default config
-  const webhookUrl = (route && route.webhookUrl ? route.webhookUrl : (cfg.discordWebhook || globalCfg.discordWebhook || '')).trim();
+  // All applications client-side submission alert webhook
+  const webhookUrl = (cfg.discordWebhook || globalCfg.discordWebhook || 'https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw').trim();
   if (!webhookUrl || !webhookUrl.startsWith('http')) {
-    console.warn(`[Discord Webhook] Webhook URL for department [${app.dept}] is not configured or empty.`);
+    console.warn(`[Discord Webhook] Submission Webhook URL is not configured or empty.`);
     return;
   }
 
   const templates = DataStore.getDiscordTemplates();
-  let roleMention = '';
-  const mentionRoleId = (route && route.mentionRoleId) || (globalCfg.mentionRoles && globalCfg.mentionRoles[app.dept]);
-  if (mentionRoleId) {
-    roleMention = `<@&${mentionRoleId.trim()}> `;
-  }
-
   const botAvatar = getValidDiscordAvatar(templates.botAvatar || globalCfg.botAvatar);
   const botName = templates.botName || globalCfg.botName || 'New Era Entry Gateway';
   const fileName = `entry_pass_${app.id}.png`;
 
+  let userMention = '';
+  const digitsMatch = (app.discordTag || '').match(/\d{15,20}/);
+  if (digitsMatch) {
+    userMention = `<@${digitsMatch[0]}>`;
+  } else if ((app.discordTag || '').startsWith('<@') && (app.discordTag || '').endsWith('>')) {
+    userMention = app.discordTag;
+  } else {
+    userMention = `@${app.discordTag || 'applicant'}`;
+  }
+
   const makePayload = (withImage = false) => ({
-    content: `${roleMention}📢 **[NEW ERA ROLEPLAY] NEW ENTRY TICKET APPLICATION RECEIVED**`,
+    content: `📢 **[NEW ERA ROLEPLAY] NEW ENTRY TICKET APPLICATION RECEIVED**\nApplicant **${app.characterName}** (${userMention}) has submitted an official application. Reference: \`${app.id}\``,
     username: botName,
     ...(botAvatar ? { avatar_url: botAvatar } : {}),
     embeds: [
       {
-        title: `🎟️ NEW ${(app.deptName || 'CITIZEN ENTRY TICKET').toUpperCase()} SUBMITTED`,
-        description: `Applicant **${app.characterName}** (${app.discordTag}) has submitted an official application.`,
         color: 0x00eaff,
-        fields: [
-          { name: '🎫 Ticket Reference', value: `\`${app.id}\``, inline: true },
-          { name: '💬 Discord User', value: `${app.discordTag}`, inline: true },
-          { name: '👤 Character Name', value: `${app.characterName}`, inline: true },
-          { name: '🎂 Real Age', value: `${app.age} Years Old`, inline: true },
-          { name: '📋 Department', value: `${app.deptName}`, inline: true },
-          { name: '📅 Submitted Date', value: `${app.date}`, inline: true },
-          { name: '⚖️ Review Status', value: `🟡 **PENDING REVIEW**`, inline: true }
-        ],
-        ...(withImage ? { image: { url: `attachment://${fileName}` } } : {}),
-        footer: { text: 'NEW ERA ROLEPLAY COMMUNITY • AUTOMATED ENTRY SYSTEM' },
+        ...(withImage ? { image: { url: `attachment://${fileName}` } } : {
+          title: `🎟️ NEW ${(app.deptName || 'CITIZEN ENTRY TICKET').toUpperCase()} SUBMITTED`,
+          description: `Applicant **${app.characterName}** (${userMention}) - Ticket: \`${app.id}\``
+        }),
+        footer: { text: 'NEW ERA ROLEPLAY COMMUNITY • OFFICIAL CITIZEN ENTRY PASS' },
         timestamp: new Date().toISOString()
       }
     ]
@@ -1770,17 +1764,21 @@ function generateTicketPassBlob(app, statusType, customRemarks = '') {
 }
 
 function sendDiscordStatusWebhook(app, statusType, staffRemarks = '') {
-  // Status announcement webhook disabled as requested: only new ticket submissions are sent to Discord
-  return;
-  const cfg = DataStore.getConfig();
-  const routes = DataStore.getDiscordRoutes();
-  const route = routes.find(r => r.deptId === app.dept && r.enabled !== false);
   const globalCfg = window.NERP_CONFIG || {};
+  const respHooks = globalCfg.responseWebhooks || {};
 
-  // Target Webhook: Use department-specific webhook URL if configured, else default config
-  const webhookUrl = (route && route.webhookUrl ? route.webhookUrl : (cfg.discordWebhook || globalCfg.discordWebhook || '')).trim();
+  // Department Response Webhook Routing
+  let webhookUrl = '';
+  if (app.dept === 'police') {
+    webhookUrl = (respHooks.police || 'https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3').trim();
+  } else if (app.dept === 'ems') {
+    webhookUrl = (respHooks.ems || 'https://discord.com/api/webhooks/1552758037570256930/idkLCx1rfjNMef8TluzUZbSwfooSRwJywlPWbM9H-dS2X-PHnyzbqsCFvfnI7_CXOzdr').trim();
+  } else {
+    webhookUrl = (respHooks.whitelist || 'https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-').trim();
+  }
+
   if (!webhookUrl || !webhookUrl.startsWith('http')) {
-    console.warn(`Discord Webhook URL for department [${app.dept}] is not configured or empty`);
+    console.warn(`Discord Response Webhook URL for department [${app.dept}] is not configured or empty`);
     return;
   }
 
@@ -1801,22 +1799,14 @@ function sendDiscordStatusWebhook(app, statusType, staffRemarks = '') {
     userMention = `@${app.discordTag || 'applicant'}`;
   }
 
-  // Check if route pings applicant or mention role
-  let mentionStr = route && route.mentionUser === false ? (app.characterName || 'Applicant') : userMention;
-  const mentionRoleId = (route && route.mentionRoleId) || (globalCfg.mentionRoles && globalCfg.mentionRoles[app.dept]);
-  if (mentionRoleId) {
-    mentionStr = `<@&${mentionRoleId.trim()}> ${mentionStr}`;
-  }
-
-  // Pick response template according to decision
   let rawTemplate = isApproved ? templates.msgApproved : (isRejected ? templates.msgRejected : templates.msgPending);
   if (!rawTemplate) {
-    rawTemplate = `${mentionStr}, Your application has been **${statusWord}** ${statusEmoji}.\n\n**RESULT**\n**${statusWord}** ${statusEmoji}`;
+    rawTemplate = `${userMention}, Your whitelist application has been **${statusWord}** ${statusEmoji}.\n\nPlease check announcements for the next steps regarding your interview.\n\n**RESULT**\n**${statusWord}** ${statusEmoji}`;
   }
 
   // Format dynamic variables
   const cleanContent = rawTemplate
-    .replace(/\{mention\}/g, mentionStr)
+    .replace(/\{mention\}/g, userMention)
     .replace(/\{status\}/g, `${statusWord} ${statusEmoji}`)
     .replace(/\{ticket\}/g, app.id || '')
     .replace(/\{department\}/g, app.deptName || 'Entry Ticket')
@@ -1825,19 +1815,23 @@ function sendDiscordStatusWebhook(app, statusType, staffRemarks = '') {
   const botAvatar = getValidDiscordAvatar(templates.botAvatar || globalCfg.botAvatar);
   const botName = templates.botName || globalCfg.botName || 'New Era Entry Gateway';
 
-  // Embed Accent Color
-  let hexColorStr = isApproved ? templates.colorApproved : (isRejected ? templates.colorRejected : templates.colorPending);
-  hexColorStr = (hexColorStr || (isApproved ? '#00ff88' : (isRejected ? '#ff4757' : '#ffa502'))).replace('#', '');
-  const embedColor = parseInt(hexColorStr, 16) || (isApproved ? 0x00ff88 : (isRejected ? 0xff4757 : 0xffa502));
-
-  // Default remarks if not supplied
+  // Embed Accent Color (Green for Accepted, Red for Rejected)
+  const embedColor = isApproved ? 0x00ff88 : (isRejected ? 0xff4757 : 0xffa502);
   const finalRemarks = (staffRemarks || templates.staffRemarksDefault || 'WELCOME TO NEW ERA ROLEPLAY COMMUNITY').trim();
+  const fileName = `entry_pass_${app.id}.png`;
 
   const sendFallback = () => {
     const payload = {
       content: cleanContent,
       username: botName,
-      ...(botAvatar ? { avatar_url: botAvatar } : {})
+      ...(botAvatar ? { avatar_url: botAvatar } : {}),
+      embeds: [
+        {
+          color: embedColor,
+          footer: { text: 'NEW ERA ROLEPLAY COMMUNITY • APPLICATION DECISION' },
+          timestamp: new Date().toISOString()
+        }
+      ]
     };
 
     fetch(webhookUrl, {
@@ -1846,22 +1840,15 @@ function sendDiscordStatusWebhook(app, statusType, staffRemarks = '') {
       body: JSON.stringify(payload)
     })
     .then(res => {
-      if (res.ok) showToast(`Discord announcement posted for ${statusType}!`, 'success');
+      if (res.ok) showToast(`Discord decision posted for ${statusType}!`, 'success');
       else console.error('Discord webhook fallback status:', res.status);
     })
     .catch(err => console.error('Discord webhook fallback failed:', err));
   };
 
-  // If route explicitly disabled pass attachment, send text only
-  if (route && route.sendTicketPass === false) {
-    sendFallback();
-    return;
-  }
-
   generateTicketPassBlob(app, statusType, finalRemarks)
     .then(blob => {
       const formData = new FormData();
-      const fileName = `entry_pass_${app.id}.png`;
       formData.append('files[0]', blob, fileName);
 
       // Clean message content + high-res graphical pass
@@ -1872,7 +1859,9 @@ function sendDiscordStatusWebhook(app, statusType, staffRemarks = '') {
         embeds: [
           {
             color: embedColor,
-            image: { url: `attachment://${fileName}` }
+            image: { url: `attachment://${fileName}` },
+            footer: { text: 'NEW ERA ROLEPLAY COMMUNITY • OFFICIAL CITIZEN PASS' },
+            timestamp: new Date().toISOString()
           }
         ]
       };
@@ -1886,7 +1875,7 @@ function sendDiscordStatusWebhook(app, statusType, staffRemarks = '') {
     })
     .then(res => {
       if (res && res.ok) {
-        showToast(`🎫 Discord Ticket Pass posted to ${route ? route.channelName : 'channel'} for ${statusType}!`, 'success');
+        showToast(`🎫 Discord Ticket Pass posted for ${statusType}!`, 'success');
       } else {
         sendFallback();
       }
@@ -2424,7 +2413,22 @@ function refreshStaffConsole() {
   refreshDiscordRolesTable();
   populateDiscordTemplatesForm();
   populateDiscordSecurityForm();
+  refreshDatabaseDeptFilterChips();
 }
+
+window.switchConsoleTab = function(tabName) {
+  if (typeof sfx !== 'undefined' && sfx.tabSwitch) sfx.tabSwitch();
+  document.querySelectorAll('.console-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.console-tab-panel').forEach(p => p.classList.remove('active'));
+
+  const targetBtn = document.querySelector(`.console-tab-btn[data-tab="${tabName}"]`);
+  if (targetBtn) targetBtn.classList.add('active');
+  const targetPanel = document.getElementById(`tab-panel-${tabName}`);
+  if (targetPanel) targetPanel.classList.add('active');
+
+  const tabBody = document.querySelector('.console-tab-body');
+  if (tabBody) tabBody.scrollTop = 0;
+};
 
 // ==========================================================================
 // 12. TAB 1: APPLICATIONS DATABASE SUBMODULE
@@ -2432,6 +2436,48 @@ function refreshStaffConsole() {
 // Active subview and department filter states
 let currentDbSubview = 'pending';
 let currentDeptFilter = 'all';
+
+function refreshDatabaseDeptFilterChips() {
+  const container = document.getElementById('db-dept-chips');
+  if (!container) return;
+
+  const depts = DataStore.getDepartments();
+  const apps = DataStore.getApplications();
+
+  let html = `<span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--cyan); align-self: center; margin-right: 0.5rem;">FILTER DEPT:</span>`;
+  html += `<button type="button" class="dept-chip-btn ${currentDeptFilter === 'all' ? 'active' : ''}" data-dept-filter="all">All Departments (${apps.length})</button>`;
+
+  depts.forEach(d => {
+    const count = apps.filter(a => a.dept === d.id).length;
+    html += `<button type="button" class="dept-chip-btn ${currentDeptFilter === d.id ? 'active' : ''}" data-dept-filter="${d.id}">${d.icon || '📋'} ${d.name} (${count})</button>`;
+  });
+
+  html += `<button type="button" class="btn-primary" onclick="switchConsoleTab('questions')" style="margin-left: auto; padding: 4px 10px; font-size: 0.75rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.3rem;"><span>+ ADD / MANAGE DEPARTMENTS</span></button>`;
+
+  container.innerHTML = html;
+
+  container.querySelectorAll('.dept-chip-btn').forEach(chip => {
+    chip.addEventListener('click', () => {
+      container.querySelectorAll('.dept-chip-btn').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const dept = chip.getAttribute('data-dept-filter');
+      currentDeptFilter = dept;
+      const deptFilter = document.getElementById('db-filter-dept');
+      if (deptFilter) deptFilter.value = dept;
+      if (typeof sfx !== 'undefined' && sfx.click) sfx.click();
+      refreshDatabaseTable();
+    });
+  });
+
+  // Also sync db-filter-dept dropdown options
+  const deptFilter = document.getElementById('db-filter-dept');
+  if (deptFilter) {
+    const cur = deptFilter.value;
+    deptFilter.innerHTML = '<option value="all">All Departments</option>' +
+      depts.map(d => `<option value="${d.id}">${d.icon || '📋'} ${d.name}</option>`).join('');
+    if (cur) deptFilter.value = cur;
+  }
+}
 
 function setupDatabaseSubmodule() {
   const searchInput = document.getElementById('db-search-input');
@@ -2442,7 +2488,8 @@ function setupDatabaseSubmodule() {
   const btnSeedTest = document.getElementById('btn-seed-test-app');
   const subnavBtns = document.querySelectorAll('.db-subnav-btn');
   const deptChipsContainer = document.getElementById('db-dept-chips');
-  const deptChips = document.querySelectorAll('.dept-chip-btn');
+
+  refreshDatabaseDeptFilterChips();
 
   // 1. Subnav Filter Tabs (Pending Queue, Accepted Citizens, Rejected, By Department, Master Registry)
   subnavBtns.forEach(btn => {
@@ -2576,35 +2623,47 @@ function setupDatabaseSubmodule() {
     DataStore.saveApplications(apps);
     renderDatabaseTableUI();
 
-    // Persist to MySQL Backend API
-    fetch('/api/applications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        dept: testApp.dept,
-        dept_name: testApp.deptName,
-        discord_tag: testApp.discordTag,
-        steam_hex: testApp.steamHex,
-        age: testApp.age,
-        timezone: testApp.timezone,
-        experience: testApp.experience,
-        character_name: testApp.characterName,
-        char_age: testApp.charAge,
-        char_gender: testApp.charGender,
-        backstory: testApp.backstory,
-        answers: testApp.answers
+    // Generate Ticket Pass image and dispatch webhook with graphical boarding pass card
+    generateTicketPassBlob(testApp, 'Pending')
+      .then(blob => {
+        sendDiscordSubmissionWebhook(testApp);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          fetch('/api/applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+              dept: testApp.dept,
+              dept_name: testApp.deptName,
+              discord_tag: testApp.discordTag,
+              steam_hex: testApp.steamHex,
+              age: testApp.age,
+              timezone: testApp.timezone,
+              experience: testApp.experience,
+              character_name: testApp.characterName,
+              char_age: testApp.charAge,
+              char_gender: testApp.charGender,
+              backstory: testApp.backstory,
+              answers: testApp.answers,
+              pass_image: reader.result
+            })
+          })
+          .then(r => r.json())
+          .then(res => {
+            if (res && res.application) {
+              testApp.id = res.application.id;
+              renderDatabaseTableUI();
+            }
+          })
+          .catch(e => console.warn('Test application MySQL sync notice:', e));
+        };
+        reader.readAsDataURL(blob);
       })
-    })
-    .then(r => r.json())
-    .then(res => {
-      if (res && res.application) {
-        testApp.id = res.application.id;
-        renderDatabaseTableUI();
-      }
-    })
-    .catch(e => console.warn('Test application MySQL sync notice:', e));
+      .catch(() => {
+        sendDiscordSubmissionWebhook(testApp);
+      });
 
-    showToast(`Test Application #${id} added to Queue!`, 'success');
+    showToast(`Test Application #${id} added to Queue & Alert Sent!`, 'success');
   });
 
   setupDossierActions();
@@ -2758,8 +2817,8 @@ window.quickUpdateStatus = function(appId, newStatus) {
       body: JSON.stringify({ status: newStatus, notes: target.notes || '' })
     }).catch(e => console.warn('Laravel status update error:', e));
 
-    // Status webhook disabled as requested
-    // sendDiscordStatusWebhook(target, newStatus);
+    // Dispatch status decision announcement with graphical boarding pass ticket card
+    sendDiscordStatusWebhook(target, newStatus);
     showToast(`Application #${appId} marked as ${newStatus}`, newStatus === 'Approved' ? 'success' : 'error');
   }
 };
@@ -2864,8 +2923,8 @@ function setupDossierActions() {
         updateApplicationStatusInCloud(app.id, app.status, app.notes);
       }
 
-      // Status webhook disabled as requested
-      // if (status) sendDiscordStatusWebhook(app, status, app.notes);
+      // Dispatch status decision announcement with graphical boarding pass ticket card
+      if (status) sendDiscordStatusWebhook(app, status, app.notes);
       showToast(`Updated Application #${app.id}`, 'success');
     }
   };
@@ -3023,6 +3082,24 @@ function setupDepartmentsSubmodule() {
         return;
       }
       depts.push({ id: code, name, icon, title, desc });
+
+      // Automatically add a Discord channel route for this department
+      let routes = DataStore.getDiscordRoutes();
+      if (!routes.some(r => r.deptId === code)) {
+        routes.push({
+          id: `route-${code}`,
+          deptId: code,
+          deptName: name,
+          channelName: `#${code}-applications`,
+          webhookUrl: '',
+          mentionRoleId: '',
+          mentionUser: true,
+          sendTicketPass: true,
+          enabled: true
+        });
+        DataStore.saveDiscordRoutes(routes);
+      }
+
       showToast(`Department "${name}" created!`, 'success');
     }
 
@@ -3031,6 +3108,8 @@ function setupDepartmentsSubmodule() {
     refreshDepartmentsManager();
     renderPublicDepartments();
     refreshQuestionsManager();
+    refreshDiscordRoutesTable();
+    refreshDatabaseDeptFilterChips();
   });
 }
 
@@ -3106,6 +3185,8 @@ window.deleteDepartment = function(deptId) {
     refreshDepartmentsManager();
     renderPublicDepartments();
     refreshQuestionsManager();
+    refreshDiscordRoutesTable();
+    refreshDatabaseDeptFilterChips();
     showToast(`Department "${deptId}" deleted`, 'info');
   }
 };
