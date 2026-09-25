@@ -137,10 +137,14 @@ class ApplicationController extends Controller
      */
     protected function dispatchDiscordSubmission(Application $app)
     {
+        $entryHook = env('DISCORD_WEBHOOK_ENTRY') ?: 'https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-';
+        $policeHook = env('DISCORD_WEBHOOK_POLICE') ?: 'https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3';
+        $emsHook = env('DISCORD_WEBHOOK_EMS') ?: 'https://discord.com/api/webhooks/1552758037570256930/idkLCx1rfjNMef8TluzUZbSwfooSRwJywlPWbM9H-dS2X-PHnyzbqsCFvfnI7_CXOzdr';
+
         $webhookUrl = match($app->dept) {
-            'police' => env('DISCORD_WEBHOOK_POLICE', env('DISCORD_WEBHOOK_ENTRY')),
-            'ems' => env('DISCORD_WEBHOOK_EMS', env('DISCORD_WEBHOOK_ENTRY')),
-            default => env('DISCORD_WEBHOOK_ENTRY'),
+            'police' => $policeHook,
+            'ems' => $emsHook,
+            default => $entryHook,
         };
 
         if (empty($webhookUrl)) {
