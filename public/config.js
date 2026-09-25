@@ -21,11 +21,11 @@
 window.NERP_CONFIG = {
   // MAIN DISCORD WEBHOOK URL (Applications submitted by anyone on the website will be sent here!)
   // PASTE YOUR DISCORD WEBHOOK URL INSIDE THE QUOTES:
-  discordWebhook: "https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-",
+  discordWebhook: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",
 
   // Department-Specific Channel Webhooks
   departmentWebhooks: {
-    whitelist: "https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-",     // #citizen-tickets channel webhook
+    whitelist: "https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw",     // #citizen-tickets channel webhook
     police: "https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3",        // #police-recruitment channel webhook
     ems: "https://discord.com/api/webhooks/1552758037570256930/idkLCx1rfjNMef8TluzUZbSwfooSRwJywlPWbM9H-dS2X-PHnyzbqsCFvfnI7_CXOzdr",           // #ems-applications channel webhook
     mechanic: "",      // #mechanic-desk channel webhook (uses default if empty)

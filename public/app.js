@@ -169,7 +169,7 @@ const DataStore = {
       uptime: '99.98% (24h 10m)',
       serverStatus: globalCfg.serverStatus || 'ONLINE',
       discordInvite: globalCfg.discordInvite || 'https://discord.com/invite/bZ2YpSrq8',
-      discordWebhook: globalCfg.discordWebhook || 'https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-',
+      discordWebhook: globalCfg.discordWebhook || 'https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw',
       adminPasscode: globalCfg.adminPasscode || 'newera2026',
       firebaseDbUrl: globalCfg.firebaseDbUrl || ''
     };
@@ -506,7 +506,7 @@ const DataStore = {
         deptId: 'whitelist',
         deptName: 'Citizen Entry Ticket',
         channelName: '#citizen-tickets',
-        webhookUrl: deptHooks.whitelist || globalWebhook || 'https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-',
+        webhookUrl: deptHooks.whitelist || globalWebhook || 'https://discord.com/api/webhooks/1553103300768047244/FhnaFVOxYvDH62A0q16qotZCj1sUd-Uxue1v24WNykBD54A_JZxHu3WF2h7ZZZdIdTAw',
         mentionRoleId: mentionRoles.whitelist || '',
         mentionUser: true,
         sendTicketPass: true,
