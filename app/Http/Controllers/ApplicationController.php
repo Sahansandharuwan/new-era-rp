@@ -36,6 +36,7 @@ class ApplicationController extends Controller
             'char_gender' => 'nullable|string',
             'backstory' => 'nullable|string',
             'answers' => 'nullable|array',
+            'pass_image' => 'nullable|string',
         ]);
 
         $ticketId = 'NET-' . rand(1000, 9999) . '-LK';
@@ -58,8 +59,8 @@ class ApplicationController extends Controller
             'notes' => 'New submission received via web portal.',
         ]);
 
-        // Dispatch Discord Webhook
-        $this->dispatchDiscordSubmission($app);
+        // Dispatch Discord Webhook with attached ticket pass card
+        $this->dispatchDiscordSubmission($app, $validated['pass_image'] ?? null);
 
         return response()->json([
             'success' => true,
@@ -135,7 +136,7 @@ class ApplicationController extends Controller
     /**
      * Internal: Dispatch Discord Submission Webhook.
      */
-    protected function dispatchDiscordSubmission(Application $app)
+    protected function dispatchDiscordSubmission(Application $app, ?string $passImageBase64 = null)
     {
         $entryHook = env('DISCORD_WEBHOOK_ENTRY') ?: 'https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-';
         $policeHook = env('DISCORD_WEBHOOK_POLICE') ?: 'https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3';
@@ -152,31 +153,49 @@ class ApplicationController extends Controller
             return;
         }
 
+        $fileName = "entry_pass_{$app->id}.png";
+        $hasImage = !empty($passImageBase64);
+
+        $embed = [
+            'title' => "📋 NEW " . strtoupper($app->dept_name) . " SUBMITTED",
+            'description' => "Applicant **{$app->character_name}** ({$app->discord_tag}) has submitted an official application.",
+            'color' => 0x00eaff,
+            'fields' => [
+                ['name' => '🎫 Ticket Reference', 'value' => "`{$app->id}`", 'inline' => true],
+                ['name' => '💬 Discord User', 'value' => "{$app->discord_tag}", 'inline' => true],
+                ['name' => '👤 Character Name', 'value' => "{$app->character_name}", 'inline' => true],
+                ['name' => '🎂 Real Age', 'value' => "{$app->age} Years Old", 'inline' => true],
+                ['name' => '🏢 Department', 'value' => "{$app->dept_name}", 'inline' => true],
+                ['name' => '📅 Submitted Date', 'value' => $app->created_at->format('Y-m-d'), 'inline' => true],
+                ['name' => '⚖️ Review Status', 'value' => "🟡 **PENDING REVIEW**", 'inline' => true]
+            ],
+            'footer' => ['text' => 'NEW ERA ROLEPLAY COMMUNITY • AUTOMATED ENTRY SYSTEM'],
+            'timestamp' => now()->toIso8601String()
+        ];
+
+        if ($hasImage) {
+            $embed['image'] = ['url' => "attachment://{$fileName}"];
+        }
+
         $payload = [
             'content' => "🔔 **[NEW ERA ROLEPLAY] NEW ENTRY TICKET APPLICATION RECEIVED**",
             'username' => 'New Era Entry Gateway',
-            'embeds' => [
-                [
-                    'title' => "📋 NEW " . strtoupper($app->dept_name) . " SUBMITTED",
-                    'description' => "Applicant **{$app->character_name}** ({$app->discord_tag}) has submitted an official application.",
-                    'color' => 0x00eaff,
-                    'fields' => [
-                        ['name' => '🎫 Ticket Reference', 'value' => "`{$app->id}`", 'inline' => true],
-                        ['name' => '💬 Discord User', 'value' => "{$app->discord_tag}", 'inline' => true],
-                        ['name' => '👤 Character Name', 'value' => "{$app->character_name}", 'inline' => true],
-                        ['name' => '🎂 Real Age', 'value' => "{$app->age} Years Old", 'inline' => true],
-                        ['name' => '🏢 Department', 'value' => "{$app->dept_name}", 'inline' => true],
-                        ['name' => '📅 Submitted Date', 'value' => $app->created_at->format('Y-m-d'), 'inline' => true],
-                        ['name' => '⚖️ Review Status', 'value' => "🟡 **PENDING REVIEW**", 'inline' => true]
-                    ],
-                    'footer' => ['text' => 'NEW ERA ROLEPLAY COMMUNITY • AUTOMATED ENTRY SYSTEM'],
-                    'timestamp' => now()->toIso8601String()
-                ]
-            ]
+            'embeds' => [$embed]
         ];
 
         try {
-            Http::timeout(6)->post($webhookUrl, $payload);
+            if ($hasImage) {
+                $cleanBase64 = $passImageBase64;
+                if (str_contains($cleanBase64, ',')) {
+                    $cleanBase64 = substr($cleanBase64, strpos($cleanBase64, ',') + 1);
+                }
+                $binary = base64_decode($cleanBase64);
+                Http::timeout(10)
+                    ->attach('files[0]', $binary, $fileName)
+                    ->post($webhookUrl, ['payload_json' => json_encode($payload)]);
+            } else {
+                Http::timeout(6)->post($webhookUrl, $payload);
+            }
         } catch (\Exception $e) {
             Log::error("Discord submission webhook failed: " . $e->getMessage());
         }

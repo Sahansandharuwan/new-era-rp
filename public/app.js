@@ -1238,35 +1238,64 @@ function handleApplicationSubmission(e) {
   apps.unshift(newApp);
   DataStore.saveApplications(apps);
 
-  // Send to Laravel MySQL Backend API (Saves to MySQL & Dispatches Discord Webhook)
-  fetch('/api/applications', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({
-      dept: newApp.dept,
-      dept_name: newApp.deptName,
-      discord_tag: newApp.discordTag,
-      steam_hex: newApp.steamHex,
-      age: newApp.age,
-      timezone: newApp.timezone,
-      experience: newApp.experience,
-      character_name: newApp.characterName,
-      char_age: newApp.charAge,
-      char_gender: newApp.charGender,
-      backstory: newApp.backstory,
-      answers: newApp.answers
+  // Generate Ticket Pass image data URL and send to Laravel MySQL Backend API
+  generateTicketPassBlob(newApp, 'Pending')
+    .then(blob => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const passImage = reader.result;
+        fetch('/api/applications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            dept: newApp.dept,
+            dept_name: newApp.deptName,
+            discord_tag: newApp.discordTag,
+            steam_hex: newApp.steamHex,
+            age: newApp.age,
+            timezone: newApp.timezone,
+            experience: newApp.experience,
+            character_name: newApp.characterName,
+            char_age: newApp.charAge,
+            char_gender: newApp.charGender,
+            backstory: newApp.backstory,
+            answers: newApp.answers,
+            pass_image: passImage
+          })
+        })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.application && data.application.id) {
+            newApp.id = data.application.id;
+            displayBoardingPass(newApp);
+          }
+        })
+        .catch(err => console.warn('Laravel API submit notice:', err));
+      };
+      reader.readAsDataURL(blob);
     })
-  })
-  .then(res => res.ok ? res.json() : null)
-  .then(data => {
-    if (data && data.application && data.application.id) {
-      newApp.id = data.application.id;
-      displayBoardingPass(newApp);
-    }
-  })
-  .catch(err => console.warn('Laravel API submit notice:', err));
+    .catch(() => {
+      fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          dept: newApp.dept,
+          dept_name: newApp.deptName,
+          discord_tag: newApp.discordTag,
+          steam_hex: newApp.steamHex,
+          age: newApp.age,
+          timezone: newApp.timezone,
+          experience: newApp.experience,
+          character_name: newApp.characterName,
+          char_age: newApp.charAge,
+          char_gender: newApp.charGender,
+          backstory: newApp.backstory,
+          answers: newApp.answers
+        })
+      }).catch(err => console.warn('Laravel API submit notice:', err));
+    });
 
-  // Also send client-side Discord Webhook fallback
+  // Client-side Discord Webhook with Card Image Attachment
   try {
     sendDiscordSubmissionWebhook(newApp);
   } catch (err) {
@@ -1378,14 +1407,15 @@ function sendDiscordSubmissionWebhook(app) {
 
   const botAvatar = getValidDiscordAvatar(templates.botAvatar || globalCfg.botAvatar);
   const botName = templates.botName || globalCfg.botName || 'New Era Entry Gateway';
+  const fileName = `entry_pass_${app.id}.png`;
 
-  const payload = {
+  const makePayload = (withImage = false) => ({
     content: `${roleMention}📢 **[NEW ERA ROLEPLAY] NEW ENTRY TICKET APPLICATION RECEIVED**`,
     username: botName,
     ...(botAvatar ? { avatar_url: botAvatar } : {}),
     embeds: [
       {
-        title: `🎟️ NEW ${app.deptName.toUpperCase()} SUBMITTED`,
+        title: `🎟️ NEW ${(app.deptName || 'CITIZEN ENTRY TICKET').toUpperCase()} SUBMITTED`,
         description: `Applicant **${app.characterName}** (${app.discordTag}) has submitted an official application.`,
         color: 0x00eaff,
         fields: [
@@ -1397,26 +1427,32 @@ function sendDiscordSubmissionWebhook(app) {
           { name: '📅 Submitted Date', value: `${app.date}`, inline: true },
           { name: '⚖️ Review Status', value: `🟡 **PENDING REVIEW**`, inline: true }
         ],
+        ...(withImage ? { image: { url: `attachment://${fileName}` } } : {}),
         footer: { text: 'NEW ERA ROLEPLAY COMMUNITY • AUTOMATED ENTRY SYSTEM' },
         timestamp: new Date().toISOString()
       }
     ]
-  };
+  });
 
-  fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(res => {
-    if (res.ok) {
-      console.log(`[Discord Webhook] Successfully sent application for #${app.id}`);
-    } else {
-      console.error(`[Discord Webhook] Submission webhook returned HTTP ${res.status}`);
-      res.text().then(txt => console.error(`[Discord Webhook] Response:`, txt));
-    }
-  })
-  .catch(err => console.error('[Discord Webhook] Submission webhook network failure:', err));
+  generateTicketPassBlob(app, 'Pending')
+    .then(blob => {
+      const formData = new FormData();
+      formData.append('files[0]', blob, fileName);
+      formData.append('payload_json', JSON.stringify(makePayload(true)));
+
+      return fetch(webhookUrl, {
+        method: 'POST',
+        body: formData
+      });
+    })
+    .catch(err => {
+      console.warn('Canvas pass generation fallback, sending text embed:', err);
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(makePayload(false))
+      });
+    });
 }
 
 /**
