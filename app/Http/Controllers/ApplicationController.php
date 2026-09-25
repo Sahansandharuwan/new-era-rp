@@ -103,6 +103,7 @@ class ApplicationController extends Controller
 
         $status = $request->input('status', $app->status);
         $notes = $request->input('notes', $app->notes);
+        $passImageBase64 = $request->input('pass_image');
 
         $app->status = $status;
         if ($notes !== null) {
@@ -110,8 +111,8 @@ class ApplicationController extends Controller
         }
         $app->save();
 
-        // Dispatch Discord Status Announcement Webhook to corresponding department response webhook
-        $this->dispatchDiscordStatus($app, $status);
+        // Dispatch Discord Status Announcement Webhook to corresponding department response webhook with image attachment
+        $this->dispatchDiscordStatus($app, $status, $passImageBase64);
 
         return response()->json([
             'success' => true,
@@ -149,7 +150,25 @@ class ApplicationController extends Controller
         }
 
         $fileName = "entry_pass_{$app->id}.png";
-        $hasImage = !empty($passImageBase64);
+        $binary = null;
+
+        if (!empty($passImageBase64)) {
+            $cleanBase64 = $passImageBase64;
+            if (str_contains($cleanBase64, ',')) {
+                $cleanBase64 = substr($cleanBase64, strpos($cleanBase64, ',') + 1);
+            }
+            $binary = base64_decode($cleanBase64);
+        }
+
+        if (empty($binary) && function_exists('imagecreatetruecolor')) {
+            try {
+                $binary = $this->generatePassImageBinary($app, 'Pending');
+            } catch (\Exception $e) {
+                Log::warning("Submission GD fallback failed: " . $e->getMessage());
+            }
+        }
+
+        $hasImage = !empty($binary);
 
         $embed = [
             'color' => 0x00eaff,
@@ -172,12 +191,7 @@ class ApplicationController extends Controller
 
         try {
             if ($hasImage) {
-                $cleanBase64 = $passImageBase64;
-                if (str_contains($cleanBase64, ',')) {
-                    $cleanBase64 = substr($cleanBase64, strpos($cleanBase64, ',') + 1);
-                }
-                $binary = base64_decode($cleanBase64);
-                Http::timeout(10)
+                Http::timeout(12)
                     ->attach('files[0]', $binary, $fileName)
                     ->post($webhookUrl, ['payload_json' => json_encode($payload)]);
             } else {
@@ -191,7 +205,7 @@ class ApplicationController extends Controller
     /**
      * Internal: Dispatch Discord Status Announcement Webhook (Response Webhooks).
      */
-    protected function dispatchDiscordStatus(Application $app, $statusType)
+    protected function dispatchDiscordStatus(Application $app, $statusType, ?string $passImageBase64 = null)
     {
         $respEntry = env('DISCORD_WEBHOOK_RESPONSE_ENTRY') ?: 'https://discord.com/api/webhooks/1552694543529283585/QvAr3vtWRuOF0oElPWOy6hMrTgKVyT9snzDg3nHc2E-HeEE4QPRtCjCblC3quL7j90s-';
         $respPolice = env('DISCORD_WEBHOOK_RESPONSE_POLICE') ?: 'https://discord.com/api/webhooks/1552757720615100436/dCmrdhEkxUXFGBiAmYCpq2u1LMdgaLSbQOnYMnwQdOhdXoqW3tW7O9Rm69-JLo545uz3';
@@ -221,22 +235,126 @@ class ApplicationController extends Controller
             $content = "{$userMention}, Your application is currently under **PENDING REVIEW** ⏳.\n\nPlease keep your Discord DMs open for staff contact.";
         }
 
+        $fileName = "entry_pass_{$app->id}.png";
+        $binary = null;
+
+        if (!empty($passImageBase64)) {
+            $cleanBase64 = $passImageBase64;
+            if (str_contains($cleanBase64, ',')) {
+                $cleanBase64 = substr($cleanBase64, strpos($cleanBase64, ',') + 1);
+            }
+            $binary = base64_decode($cleanBase64);
+        }
+
+        if (empty($binary) && function_exists('imagecreatetruecolor')) {
+            try {
+                $binary = $this->generatePassImageBinary($app, $statusType);
+            } catch (\Exception $e) {
+                Log::warning("Response GD pass image fallback failed: " . $e->getMessage());
+            }
+        }
+
+        $hasImage = !empty($binary);
+
+        $embed = [
+            'color' => $color,
+            'footer' => ['text' => 'NEW ERA ROLEPLAY COMMUNITY • OFFICIAL CITIZEN PASS'],
+            'timestamp' => now()->toIso8601String()
+        ];
+
+        if ($hasImage) {
+            $embed['image'] = ['url' => "attachment://{$fileName}"];
+        }
+
         $payload = [
             'content' => $content,
             'username' => 'New Era Entry Gateway',
-            'embeds' => [
-                [
-                    'color' => $color,
-                    'footer' => ['text' => 'NEW ERA ROLEPLAY COMMUNITY • APPLICATION DECISION'],
-                    'timestamp' => now()->toIso8601String()
-                ]
-            ]
+            'embeds' => [$embed]
         ];
 
         try {
-            Http::timeout(8)->post($webhookUrl, $payload);
+            if ($hasImage) {
+                Http::timeout(12)
+                    ->attach('files[0]', $binary, $fileName)
+                    ->post($webhookUrl, ['payload_json' => json_encode($payload)]);
+            } else {
+                Http::timeout(8)->post($webhookUrl, $payload);
+            }
         } catch (\Exception $e) {
             Log::error("Discord status webhook failed: " . $e->getMessage());
         }
+    }
+
+    /**
+     * Fallback graphic pass image generator using PHP GD (900x430 PNG).
+     */
+    protected function generatePassImageBinary(Application $app, string $status): string
+    {
+        $w = 900;
+        $h = 430;
+        $img = imagecreatetruecolor($w, $h);
+
+        $isApproved = strtolower($status) === 'approved';
+        $isRejected = strtolower($status) === 'rejected';
+
+        // Dark navy/purple background
+        $bg = imagecolorallocate($img, 10, 8, 26);
+        imagefilledrectangle($img, 0, 0, $w, $h, $bg);
+
+        // Right white stub
+        $splitX = 635;
+        $white = imagecolorallocate($img, 255, 255, 255);
+        imagefilledrectangle($img, $splitX, 0, $w, $h, $white);
+
+        // Colors
+        $cyan = imagecolorallocate($img, 0, 234, 255);
+        $purple = imagecolorallocate($img, 171, 0, 255);
+        $gray = imagecolorallocate($img, 148, 163, 184);
+        $dark = imagecolorallocate($img, 15, 23, 42);
+        $accent = $isApproved ? imagecolorallocate($img, 46, 213, 115) : ($isRejected ? imagecolorallocate($img, 255, 71, 87) : imagecolorallocate($img, 255, 165, 2));
+
+        // Outer border
+        imagerectangle($img, 1, 1, $w - 2, $h - 2, $cyan);
+
+        // Header
+        imagestring($img, 5, 40, 36, "NEW ERA ROLEPLAY - OFFICIAL CITIZEN ENTRY PASS", $cyan);
+        imagestring($img, 4, 40, 70, "ORIGIN: Civilian Transit", $gray);
+        imagestring($img, 4, 280, 70, "DEST: New Era City", $gray);
+
+        // Details
+        imagestring($img, 5, 40, 140, "CITIZEN NAME: " . strtoupper($app->character_name), $white);
+        imagestring($img, 5, 40, 180, "DISCORD TAG:  " . $app->discord_tag, $white);
+        imagestring($img, 5, 40, 220, "TICKET REF:   " . $app->id, $cyan);
+        imagestring($img, 5, 40, 260, "DEPARTMENT:   " . strtoupper($app->dept_name), $purple);
+        imagestring($img, 5, 40, 300, "DATE:         " . $app->created_at->format('Y-m-d'), $gray);
+
+        $statusText = $isApproved ? "STATUS: ACCEPTED / APPROVED [V]" : ($isRejected ? "STATUS: REJECTED [X]" : "STATUS: PENDING REVIEW");
+        imagestring($img, 5, 40, 360, $statusText, $accent);
+
+        // White Stub Side
+        imagestring($img, 4, $splitX + 20, 36, "ENTRY STUB - " . $app->id, $dark);
+        imagestring($img, 5, $splitX + 20, 100, "NEW ERA ROLEPLAY", $dark);
+        imagestring($img, 4, $splitX + 20, 130, "OFFICIAL CITIZEN PASS", $gray);
+        imagestring($img, 5, $splitX + 20, 180, "PASSENGER: " . $app->character_name, $dark);
+
+        // Barcode simulation
+        for ($i = 0; $i < 40; $i++) {
+            $bx = $splitX + 20 + ($i * 5);
+            if ($i % 2 === 0) {
+                imagefilledrectangle($img, $bx, 220, $bx + 2, 270, $dark);
+            }
+        }
+        imagestring($img, 3, $splitX + 30, 280, "* " . $app->id . " *", $gray);
+
+        // Decision pill
+        imagefilledrectangle($img, $splitX + 20, 340, $w - 20, 380, $accent);
+        $decisionStr = $isApproved ? "ACCEPTED [OK]" : ($isRejected ? "REJECTED [X]" : "PENDING");
+        imagestring($img, 5, $splitX + 45, 352, $decisionStr, $white);
+
+        ob_start();
+        imagepng($img);
+        $bin = ob_get_clean();
+        imagedestroy($img);
+        return $bin;
     }
 }

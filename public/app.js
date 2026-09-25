@@ -2810,15 +2810,27 @@ window.quickUpdateStatus = function(appId, newStatus) {
     DataStore.saveApplications(apps);
     refreshDatabaseTable();
 
-    // Sync to Laravel MySQL Backend API
-    fetch(`/api/applications/${appId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ status: newStatus, notes: target.notes || '' })
-    }).catch(e => console.warn('Laravel status update error:', e));
+    // Generate high-resolution Boarding Pass Ticket card and sync to backend
+    generateTicketPassBlob(target, newStatus, target.notes || '')
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          fetch(`/api/applications/${encodeURIComponent(appId)}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ status: newStatus, notes: target.notes || '', pass_image: reader.result })
+          }).catch(e => console.warn('Laravel status update error:', e));
+        };
+        reader.readAsDataURL(blob);
+      })
+      .catch(() => {
+        fetch(`/api/applications/${encodeURIComponent(appId)}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ status: newStatus, notes: target.notes || '' })
+        }).catch(e => console.warn('Laravel status update error:', e));
+      });
 
-    // Dispatch status decision announcement with graphical boarding pass ticket card
-    sendDiscordStatusWebhook(target, newStatus);
     showToast(`Application #${appId} marked as ${newStatus}`, newStatus === 'Approved' ? 'success' : 'error');
   }
 };
@@ -2911,20 +2923,32 @@ function setupDossierActions() {
       refreshDatabaseTable();
       openAppDossier(activeDossierId);
 
-      // Sync updated notes and status to Laravel MySQL Backend API
-      fetch(`/api/applications/${encodeURIComponent(app.id)}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ status: app.status, notes: app.notes || '' })
-      }).catch(e => console.warn('Laravel status update error:', e));
+      // Generate high-resolution Boarding Pass Ticket card and sync to backend
+      generateTicketPassBlob(app, app.status, app.notes || '')
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            fetch(`/api/applications/${encodeURIComponent(app.id)}/status`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: JSON.stringify({ status: app.status, notes: app.notes || '', pass_image: reader.result })
+            }).catch(e => console.warn('Laravel status update error:', e));
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(() => {
+          fetch(`/api/applications/${encodeURIComponent(app.id)}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ status: app.status, notes: app.notes || '' })
+          }).catch(e => console.warn('Laravel status update error:', e));
+        });
 
       // Sync updated notes and status to Cloud Realtime DB
       if (typeof updateApplicationStatusInCloud === 'function') {
         updateApplicationStatusInCloud(app.id, app.status, app.notes);
       }
 
-      // Dispatch status decision announcement with graphical boarding pass ticket card
-      if (status) sendDiscordStatusWebhook(app, status, app.notes);
       showToast(`Updated Application #${app.id}`, 'success');
     }
   };
